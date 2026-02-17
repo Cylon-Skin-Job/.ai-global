@@ -1,0 +1,204 @@
+{
+  "$schema": "Pipeline Definition",
+  "index": true,
+  "version": 1,
+  "name": "universal-task-executor",
+  "description": "Universal task execution pipeline for all Claude Code projects. Executes scoped tasks with validation, retry, and checkpoint safety.",
+  "steps": [
+    {
+      "id": "validate-task",
+      "name": "Validate Task Scope",
+      "type": "validation",
+      "checks": [
+        "task_has_objective",
+        "task_has_status_ready",
+        "task_has_success_metrics",
+        "task_has_implementation_details"
+      ],
+      "onFailure": "abort",
+      "description": "Ensure task scope meets minimum requirements before execution"
+    },
+    {
+      "id": "branch",
+      "name": "Create Git Branch",
+      "type": "system",
+      "action": "git-branch",
+      "config": {
+        "pattern": "task/{taskId}/{timestamp}"
+      },
+      "onFailure": "warn",
+      "description": "Create feature branch for isolated task execution"
+    },
+    {
+      "id": "checkpoint-initial",
+      "name": "Initial Checkpoint",
+      "type": "system",
+      "action": "git-commit",
+      "config": {
+        "message": "checkpoint: start task {taskName}"
+      },
+      "description": "Record starting state before task execution"
+    },
+    {
+      "id": "gather-context",
+      "name": "Gather Project Context",
+      "type": "prompt",
+      "prompt": "automation/prompts/gather-context.md",
+      "input": ["{projectRoot}/CLAUDE.md", "{projectRoot}/.ai-project/bulletin/STATUS.md"],
+      "output": "{taskId}.context.md",
+      "description": "Read project rules, existing architecture, recent decisions"
+    },
+    {
+      "id": "task-loop",
+      "name": "Execute Task Steps",
+      "type": "loop",
+      "over": "task.steps",
+      "maxIterations": 100,
+      "steps": [
+        {
+          "id": "step-checkpoint",
+          "name": "Step Checkpoint",
+          "type": "system",
+          "action": "git-commit",
+          "config": {
+            "message": "checkpoint: before {step.name}"
+          }
+        },
+        {
+          "id": "step-execute",
+          "name": "Execute Step",
+          "type": "prompt",
+          "prompt": "automation/prompts/execute-step.md",
+          "input": ["{task.file}", "{taskId}.context.md", "{step.instructions}"],
+          "output": "{step.id}.output.md",
+          "allowedTools": ["Read", "Glob", "Grep", "Bash", "Write", "Edit", "mcp__acp__Read", "mcp__acp__Write", "mcp__acp__Edit", "mcp__acp__Bash"],
+          "maxDuration": 900000,
+          "description": "Execute step per its instructions"
+        },
+        {
+          "id": "step-validate",
+          "name": "Validate Step Output",
+          "type": "prompt",
+          "prompt": "automation/prompts/validate-step.md",
+          "input": ["{step.instructions}", "{step.id}.output.md", "{git.diff}"],
+          "output": "{step.id}.validation.json",
+          "description": "Review output against success criteria, check safety",
+          "expectedOutput": {
+            "valid": true,
+            "issues": [],
+            "safeToCommit": true
+          }
+        },
+        {
+          "id": "step-commit",
+          "name": "Commit Step",
+          "type": "system",
+          "action": "git-commit",
+          "config": {
+            "message": "complete: {step.name}"
+          },
+          "onFailure": "warn"
+        }
+      ],
+      "onLoopFailure": "retry"
+    },
+    {
+      "id": "final-validation",
+      "name": "Final Validation",
+      "type": "prompt",
+      "prompt": "automation/prompts/final-validation.md",
+      "input": ["{task.file}", "{git.log}", "{projectRoot}/.ai-project/bulletin/STATUS.md"],
+      "output": "{taskId}.final-report.md",
+      "description": "Review entire task execution against success metrics"
+    },
+    {
+      "id": "update-status",
+      "name": "Update STATUS.md",
+      "type": "system",
+      "action": "update-bulletin",
+      "config": {
+        "file": ".ai-project/bulletin/STATUS.md",
+        "taskName": "{taskName}",
+        "newStatus": "COMPLETE",
+        "logEntry": {
+          "timestamp": "{now}",
+          "instance": "Background Claude",
+          "whatIDid": "{summary}",
+          "whatWorked": "{successes}",
+          "whatDidnt": "{failures}",
+          "commits": "{commitHashes}",
+          "blockers": "{blockers}"
+        }
+      },
+      "description": "Record completion and lessons learned"
+    },
+    {
+      "id": "merge-main",
+      "name": "Merge to Main",
+      "type": "system",
+      "action": "git-merge",
+      "config": {
+        "branch": "main",
+        "deleteSourceBranch": true,
+        "message": "merge: task/{taskId} - {taskName}"
+      },
+      "onFailure": "abort-and-report",
+      "description": "Merge completed task back to main"
+    }
+  ],
+  "retry": {
+    "enabled": true,
+    "maxAttempts": 3,
+    "backoffMultiplier": 2,
+    "onRetry": [
+      {
+        "action": "git-reset",
+        "to": "last-checkpoint"
+      },
+      {
+        "action": "log",
+        "message": "Retry attempt {attempt}/{maxAttempts}"
+      },
+      {
+        "action": "prompt",
+        "prompt": "automation/prompts/retry-with-context.md",
+        "input": ["{lastError}", "{failureContext}"]
+      }
+    ],
+    "onExhausted": {
+      "action": "abort-and-mark-blocked",
+      "updateStatus": "BLOCKED",
+      "reason": "Max retries exhausted after {maxAttempts} attempts"
+    }
+  },
+  "errorHandling": {
+    "destructiveOperations": "require-explicit-approval",
+    "gitConflicts": "abort-and-report",
+    "networkErrors": "retry-with-backoff",
+    "validationFailure": "abort-and-report"
+  },
+  "reporting": {
+    "onSuccess": {
+      "actions": [
+        "update-status-complete",
+        "log-summary",
+        "broadcast-completion"
+      ]
+    },
+    "onFailure": {
+      "actions": [
+        "update-status-blocked",
+        "log-error-context",
+        "broadcast-failure",
+        "suggest-recovery"
+      ]
+    },
+    "onAbort": {
+      "actions": [
+        "reset-to-checkpoint",
+        "log-abort-reason",
+        "update-status-aborted"
+      ]
+    }
+  }
+}
