@@ -1,4 +1,4 @@
-# Universal AI Context (ai-global)
+# Universal AI Context (.ai)
 
 This is the universal context and rules repository that can be shared across multiple projects.
 
@@ -14,15 +14,15 @@ Add as a git submodule in your project:
 
 ```bash
 cd your-project
-git submodule add /Users/rccurtrightjr./Documents/GitHub/ai-global ai-global
-git commit -m "chore: add universal AI context (ai-global) as submodule"
+git submodule add /Users/rccurtrightjr./Documents/GitHub/.ai .ai
+git commit -m "chore: add universal AI context as submodule"
 ```
 
 ## Current Location (Development)
 
 This repo is currently at:
 ```
-/Users/rccurtrightjr./Documents/GitHub/ai-global
+/Users/rccurtrightjr./Documents/GitHub/.ai
 ```
 
 ## Projects Using This
