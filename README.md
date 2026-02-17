@@ -1,4 +1,4 @@
-# Universal AI Context (.ai)
+# Universal AI Context (.ai-global)
 
 This is the universal context and rules repository that can be shared across multiple projects.
 
@@ -14,21 +14,21 @@ Add as a git submodule in your project:
 
 ```bash
 cd your-project
-git submodule add /Users/rccurtrightjr./Documents/GitHub/.ai .ai
-git commit -m "chore: add universal AI context as submodule"
+git submodule add /Users/rccurtrightjr./Documents/GitHub/.ai-global .ai-global
+git commit -m "chore: add universal AI context (.ai-global) as submodule"
 ```
 
 ## Current Location (Development)
 
 This repo is currently at:
 ```
-/Users/rccurtrightjr./Documents/GitHub/.ai
+/Users/rccurtrightjr./Documents/GitHub/.ai-global
 ```
 
 ## Projects Using This
 
-- exjw-librarian
-- raven-os
+- **exjw-librarian** - This project
+- **raven-os** - Chat interface with same architecture
 
 ## Maintaining
 
