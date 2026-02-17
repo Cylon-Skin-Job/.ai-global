@@ -29,8 +29,10 @@ import { execSync } from "child_process";
 
 // Parse CLI args
 const args = process.argv.slice(2);
-const taskNameArg = args[args.indexOf("--task") + 1] || args[0];
-const statusFileArg = args[args.indexOf("--status-file") + 1];
+const taskIdx = args.indexOf("--task");
+const taskNameArg = taskIdx >= 0 ? args[taskIdx + 1] : null;
+const statusFileIdx = args.indexOf("--status-file");
+const statusFileArg = statusFileIdx >= 0 ? args[statusFileIdx + 1] : null;
 const projectRoot = process.cwd();
 
 if (!taskNameArg) {
