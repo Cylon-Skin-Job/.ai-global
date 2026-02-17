@@ -61,9 +61,19 @@ for TASK_FILE in "$QUEUE_DIR"/*.md; do
   # Move to running/ (lock)
   mv "$TASK_FILE" "$RUNNING_DIR/$FILENAME"
 
+  # Create git branch for isolated execution
+  BRANCH="task/${TASKNAME}-${TIMESTAMP}"
+  git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH" 2>/dev/null
+  echo "   Branch: $BRANCH"
+
+  # Initial checkpoint
+  git commit --allow-empty -m "checkpoint: start $TASKNAME" 2>/dev/null
+  echo ""
+
   # Log header
   {
     echo "Task: $TASKNAME"
+    echo "Branch: $BRANCH"
     echo "Started: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
@@ -98,6 +108,11 @@ for TASK_FILE in "$QUEUE_DIR"/*.md; do
     echo "✅ $FILENAME completed successfully"
     echo "Completed: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$LOG_FILE"
     mv "$RUNNING_DIR/$FILENAME" "$DONE_DIR/${TASKNAME}-${TIMESTAMP}.md"
+
+    # Merge back to main
+    git checkout main 2>/dev/null
+    git merge --no-ff "$BRANCH" -m "merge: $TASKNAME complete" 2>/dev/null
+    echo "   Merged $BRANCH → main"
   else
     echo "❌ $FILENAME failed (exit code $EXIT_CODE)"
     echo "Failed: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$LOG_FILE"
